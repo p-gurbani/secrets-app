@@ -2,7 +2,8 @@
 // require('dotenv').config()
 const express = require("express");
 const mongoose = require("mongoose");
-const md5 = require("md5");
+const bcrypt = require("bcrypt");
+// const md5 = require("md5");
 // const encrypt = require("mongoose-encryption");
 const ejs = require("ejs");
 
@@ -17,6 +18,9 @@ const userSchema = new mongoose.Schema({
   email: String,
   password: String,
 });
+
+// using bcrypt hashing
+const saltRounds = 10;
 
 // using mongoose-encrypt
 // userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ['password'] });
@@ -33,14 +37,17 @@ app
     res.render("login");
   })
   .post(function (req, res) {
-    User.findOne(
-      {email: req.body.username}
-    ).then(foundUser => {
-      // using md5 hashing to match the hashed password
-      if(foundUser && foundUser.password === md5(req.body.password)) {
-        res.render("secrets");
-      }
-    }).catch(err => console.log(err));
+    User.findOne({ email: req.body.username })
+      .then((foundUser) => {
+        if(foundUser) {
+          bcrypt.compare(req.body.password, foundUser.password, function(err, result) {
+            if(result == true) {
+              res.render("secrets");
+            }
+          });
+        }
+      })
+      .catch((err) => console.log(err));
   });
 
 app
@@ -49,15 +56,21 @@ app
     res.render("register");
   })
   .post(function (req, res) {
-    // using md5 hashing
-    const newUser = new User({
-      email: req.body.username,
-      password: md5(req.body.password),
+    // using bcrypt hashing
+    bcrypt.hash(req.body.password, saltRounds, function (err, hash) {
+      if(!err) {
+        const newUser = new User({
+          email: req.body.username,
+          password: hash,
+        });
+        newUser
+          .save()
+          .then(() => res.render("secrets"))
+          .catch((err) => console.log(err));
+      } else {
+        console.log(err);
+      }
     });
-    newUser
-      .save()
-      .then(() => res.render("secrets"))
-      .catch((err) => console.log(err));
   });
 
 app.listen(3000, function () {
